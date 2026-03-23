@@ -15,28 +15,41 @@ struct DashboardView: View {
                     ProgressView()
                 }
             }
-            .navigationTitle("ホーム")
+            .navigationTitle(appEnv.selectedGroup?.name ?? "ホーム")
+            .toolbar { groupSwitcherButton }
         }
-        .task {
-            guard let groupID = appEnv.currentUser?.id else { return }
-            let vm = DashboardViewModel(
-                subscriptionUseCase: appEnv.subscriptionUseCase,
-                currencyUseCase: appEnv.currencyUseCase,
-                groupID: groupID,
-                baseCurrency: appEnv.currentUser?.baseCurrency ?? "JPY"
-            )
-            viewModel = vm
-            await vm.load()
+        .task { await setupViewModel() }
+        // Realtimeからの変更通知を受けて再取得
+        .onReceive(NotificationCenter.default.publisher(for: .subscriptionsDidChange)) { _ in
+            Task { await viewModel?.load() }
         }
     }
+
+    // MARK: - Setup
+
+    private func setupViewModel() async {
+        guard let group = appEnv.selectedGroup else { return }
+        let baseCurrency = appEnv.currentUser?.baseCurrency ?? "JPY"
+
+        let vm = DashboardViewModel(
+            subscriptionUseCase: appEnv.subscriptionUseCase,
+            currencyUseCase: appEnv.currencyUseCase,
+            groupID: group.id,
+            baseCurrency: baseCurrency
+        )
+        viewModel = vm
+        await vm.load()
+    }
+
+    // MARK: - Content
 
     @ViewBuilder
     private func content(vm: DashboardViewModel) -> some View {
         List {
-            // 月次・年次サマリー
+            // 月次・年次サマリーカード
             Section {
-                HStack {
-                    VStack(alignment: .leading) {
+                HStack(alignment: .top) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text("今月の総支出")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -47,7 +60,7 @@ struct DashboardView: View {
                         .font(.title2.bold())
                     }
                     Spacer()
-                    VStack(alignment: .trailing) {
+                    VStack(alignment: .trailing, spacing: 4) {
                         Text("年間換算")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -63,7 +76,7 @@ struct DashboardView: View {
 
             // カテゴリー別グラフ
             if !vm.totalByCategory.isEmpty {
-                Section("カテゴリー別") {
+                Section("カテゴリー別内訳") {
                     Chart(Array(vm.totalByCategory), id: \.key) { item in
                         SectorMark(
                             angle: .value("金額", item.value),
@@ -72,15 +85,22 @@ struct DashboardView: View {
                         .foregroundStyle(by: .value("カテゴリー", item.key?.uuidString ?? "その他"))
                     }
                     .frame(height: 200)
+                    .padding(.vertical, 4)
                 }
             }
 
             // 更新予定
             if !vm.upcomingBillings.isEmpty {
-                Section("7日以内の更新") {
+                Section("7日以内の更新予定") {
                     ForEach(vm.upcomingBillings) { sub in
                         UpcomingBillingRow(subscription: sub)
                     }
+                }
+            } else {
+                Section {
+                    Label("直近7日以内の更新予定はありません", systemImage: "checkmark.circle")
+                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
                 }
             }
 
@@ -92,12 +112,42 @@ struct DashboardView: View {
         }
         .refreshable { await vm.load() }
         .overlay {
-            if vm.isLoading { ProgressView() }
+            if vm.isLoading && vm.subscriptions.isEmpty {
+                ProgressView()
+            }
+        }
+    }
+
+    // MARK: - Group Switcher
+
+    @ToolbarContentBuilder
+    private var groupSwitcherButton: some ToolbarContent {
+        if appEnv.groups.count > 1 {
+            ToolbarItem(placement: .primaryAction) {
+                Menu {
+                    ForEach(appEnv.groups) { group in
+                        Button {
+                            Task {
+                                appEnv.selectedGroup = group
+                                await setupViewModel()
+                            }
+                        } label: {
+                            if group.id == appEnv.selectedGroup?.id {
+                                Label(group.name, systemImage: "checkmark")
+                            } else {
+                                Text(group.name)
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                }
+            }
         }
     }
 }
 
-// MARK: - Sub Views
+// MARK: - Upcoming Billing Row
 
 private struct UpcomingBillingRow: View {
     let subscription: Subscription
@@ -105,12 +155,11 @@ private struct UpcomingBillingRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text(subscription.name)
-                    .font(.body)
+                Text(subscription.name).font(.body)
                 Text(subscription.nextBillingDate.billingDaysLabel)
                     .font(.caption)
                     .foregroundStyle(
-                        subscription.nextBillingDate.isBillingToday ? .red : .secondary
+                        subscription.nextBillingDate.isBillingToday ? .red : .orange
                     )
             }
             Spacer()
