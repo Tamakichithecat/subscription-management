@@ -1,14 +1,17 @@
 import Foundation
 
 /// frankfurter.app を利用した為替レートリポジトリ（APIキー不要）
-struct ExchangeRateRepository: ExchangeRateRepositoryProtocol {
+///
+/// Swift 6 strict concurrency 対応のため actor を使用しています。
+/// キャッシュへのアクセスが自動的にシリアライズされ、データ競合を防ぎます。
+actor ExchangeRateRepository: ExchangeRateRepositoryProtocol {
 
-    // メモリキャッシュ（起動中のみ保持）
-    private static var cache: [String: [ExchangeRate]] = [:]
+    // メモリキャッシュ（起動中のみ保持、actor により自動的にスレッドセーフ）
+    private var cache: [String: [ExchangeRate]] = [:]
 
     func fetchRates(base: String) async throws -> [ExchangeRate] {
         // キャッシュが有効なら返す
-        if let cached = Self.cache[base], !cached.isEmpty, !(cached.first?.isExpired ?? true) {
+        if let cached = cache[base], !cached.isEmpty, !(cached.first?.isExpired ?? true) {
             return cached
         }
 
@@ -25,7 +28,7 @@ struct ExchangeRateRepository: ExchangeRateRepositoryProtocol {
             )
         }
 
-        Self.cache[base] = rates
+        cache[base] = rates
         return rates
     }
 

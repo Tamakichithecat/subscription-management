@@ -36,6 +36,8 @@ targets:
         INFOPLIST_FILE: SubTrackFamily/Resources/Info.plist
         DEVELOPMENT_TEAM: ""
         SWIFT_STRICT_CONCURRENCY: complete
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
       configs:
         Debug:
           DEBUG_INFORMATION_FORMAT: dwarf
