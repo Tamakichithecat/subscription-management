@@ -1,0 +1,37 @@
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+!*.xcworkspace/contents.xcworkspacedata
+xcuserdata/
+*.moved-aside
+DerivedData/
+*.hmap
+*.ipa
+*.xcarchive
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# CocoaPods（未使用だが念のため）
+Pods/
+Podfile.lock
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# 環境変数（シークレット）
+.env
+.env.local
+Secrets.swift
+
+# Xcode Previews
+PreviewAssets.xcassets/
+
+# Build artifacts
+build/
