@@ -48,8 +48,8 @@
         ▼                          ▼
 ┌──────────────────┐   ┌─────────────────────────┐
 │  APNs (Apple     │   │  Exchange Rate API       │
-│  Push Notification│  │  (例: Open Exchange Rates │
-│  Service)        │   │   / exchangerate.host)    │
+│  Push Notification│  │  Exchange Rate API       │
+│  Service)        │   │   (frankfurter.app)       │
 └──────────────────┘   └─────────────────────────┘
 ```
 
@@ -61,8 +61,8 @@
 
 | 項目 | 技術 | 選定理由 |
 |------|------|----------|
-| 言語 | Swift 5.9+ | iOS Nativeの標準言語 |
-| UI フレームワーク | SwiftUI | 宣言的UIで生産性が高い。iOS 16+で機能が充実 |
+| 言語 | Swift 6.0+ | iOS Nativeの標準言語。Xcode 26からSwift 6がデフォルト |
+| UI フレームワーク | SwiftUI | 宣言的UI。Xcode 26でLiquid Glass UIが自動適用（iOS 26+） |
 | アーキテクチャ | MVVM + Clean Architecture | テスタビリティ・拡張性が高い |
 | 非同期処理 | Swift Concurrency (async/await) | モダンな非同期処理。コールバック地獄を回避 |
 | リアクティブ | Combine | SwiftUIとの親和性が高い |
@@ -75,7 +75,7 @@
 | ライブラリ | 用途 | 取得先 |
 |-----------|------|--------|
 | `supabase-swift` | Supabase SDK（Auth・DB・Realtime） | github.com/supabase/supabase-swift |
-| `Charts` (Swift Charts) | 費用グラフの描画 | Apple標準（iOS 16+） |
+| `Charts` (Swift Charts) | 費用グラフの描画 | Apple標準（iOS 17+） |
 | `KeychainAccess` | Keychain操作の簡略化 | github.com/kishikawakatsumi/KeychainAccess |
 
 ### 2.3 バックエンド（Supabase）
@@ -94,8 +94,8 @@
 
 | サービス | 用途 | 代替 |
 |---------|------|------|
-| Open Exchange Rates | 為替レート取得（日次） | exchangerate.host（無料枠あり） |
-| Apple Push Notification Service (APNs) | プッシュ通知 | - |
+| frankfurter.app | 為替レート取得（日次）。APIキー不要・完全無料 | - |
+| Apple Push Notification Service (APNs) | プッシュ通知（v1.1以降・Apple Developer Program要） | - |
 
 ---
 
@@ -293,8 +293,8 @@ channel.subscribe()
 [Edge Function (Daily Cron: 01:00 JST)]
         │
         ▼
-[Open Exchange Rates API]
-  GET /api/latest.json?base=JPY
+[frankfurter.app（APIキー不要）]
+  GET /v1/latest?base=JPY
         │
         ▼
 [exchange_rates テーブルに UPSERT]

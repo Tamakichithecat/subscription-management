@@ -180,13 +180,22 @@
 
 ## 6. 将来の拡張ロードマップ
 
-| フェーズ | 内容 |
-|---------|------|
-| v1.0 | 手動登録・家族グループ・通知・多通貨・費用可視化 |
-| v1.1 | CSVインポート・検索強化・PDFエクスポート |
-| v2.0 | メール・PDF請求書からの自動読み取り |
-| v2.1 | クレジットカード明細との連携（Plaid等） |
-| v3.0 | Android対応（React Native/Flutter への移行検討） |
+| フェーズ | 内容 | 備考 |
+|---------|------|------|
+| v1.0 | 手動登録・家族グループ・多通貨・費用可視化・契約情報一覧 | Apple Developer Program不要。為替レートはfrankfurter.app（APIキー不要） |
+| v1.1 | プッシュ通知（更新日・解約日リマインド）・CSVインポート | Apple Developer Program（有償）登録が必要 |
+| v1.2 | 検索強化・フィルタリング・PDFエクスポート | - |
+| v2.0 | メール・PDF請求書からの自動読み取り | - |
+| v2.1 | クレジットカード明細との連携 | - |
+| v3.0 | Android対応（React Native/Flutter への移行検討） | - |
+
+### 開発環境・技術メモ（合意済み）
+
+- **Xcode**: 26.2（Swift 6、iOS 26対応）
+- **最小サポートOS**: iOS 17.0
+- **為替レートAPI**: [frankfurter.app](https://api.frankfurter.app)（APIキー不要・無料）
+- **プッシュ通知**: v1.1以降に実装（Apple Developer Program登録後）
+- **BaaS**: Supabase（PostgreSQL）
 
 ---
 
