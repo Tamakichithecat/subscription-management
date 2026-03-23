@@ -18,23 +18,22 @@ struct SubscriptionListView: View {
             .navigationTitle("サブスク一覧")
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
-                    Button { showAdd = true } label: {
-                        Image(systemName: "plus")
-                    }
+                    Button { showAdd = true } label: { Image(systemName: "plus") }
                 }
             }
             .sheet(isPresented: $showAdd) {
                 SubscriptionFormView(mode: .add)
+                    .onDisappear { Task { await viewModel?.load() } }
             }
         }
         .task {
-            guard let groupID = appEnv.currentUser?.id else { return }
-            let vm = SubscriptionViewModel(
-                useCase: appEnv.subscriptionUseCase,
-                groupID: groupID
-            )
+            guard let group = appEnv.selectedGroup else { return }
+            let vm = SubscriptionViewModel(useCase: appEnv.subscriptionUseCase, groupID: group.id)
             viewModel = vm
             await vm.load()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .subscriptionsDidChange)) { _ in
+            Task { await viewModel?.load() }
         }
     }
 
@@ -42,7 +41,6 @@ struct SubscriptionListView: View {
     private func content(vm: SubscriptionViewModel) -> some View {
         @Bindable var vm = vm
         List {
-            // ステータスフィルター
             Picker("ステータス", selection: $vm.selectedStatus) {
                 Text("すべて").tag(Subscription.Status?.none)
                 ForEach(Subscription.Status.allCases, id: \.self) { s in
@@ -52,17 +50,25 @@ struct SubscriptionListView: View {
             .pickerStyle(.segmented)
             .listRowBackground(Color.clear)
 
-            ForEach(vm.filtered) { sub in
-                NavigationLink {
-                    SubscriptionDetailView(subscription: sub)
-                } label: {
-                    SubscriptionRow(subscription: sub)
+            if vm.filtered.isEmpty {
+                ContentUnavailableView(
+                    "サブスクがありません",
+                    systemImage: "creditcard",
+                    description: Text("右上の ＋ ボタンから追加してください")
+                )
+                .listRowBackground(Color.clear)
+            } else {
+                ForEach(vm.filtered) { sub in
+                    NavigationLink {
+                        SubscriptionDetailView(subscription: sub)
+                    } label: {
+                        SubscriptionRow(subscription: sub)
+                    }
                 }
-            }
-            .onDelete { indexSet in
-                for index in indexSet {
-                    let sub = vm.filtered[index]
-                    Task { await vm.delete(sub) }
+                .onDelete { indexSet in
+                    for index in indexSet {
+                        Task { await vm.delete(vm.filtered[index]) }
+                    }
                 }
             }
         }
@@ -86,27 +92,21 @@ private struct SubscriptionRow: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
-                    Text(subscription.name)
-                        .font(.body)
+                    Text(subscription.name).font(.body)
                     if subscription.isImportant {
-                        Image(systemName: "star.fill")
-                            .foregroundStyle(.yellow)
-                            .font(.caption)
+                        Image(systemName: "star.fill").foregroundStyle(.yellow).font(.caption)
                     }
                 }
                 Text(subscription.nextBillingDate.billingDaysLabel)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(subscription.nextBillingDate.isUpcomingBilling ? .orange : .secondary)
             }
 
             Spacer()
 
             VStack(alignment: .trailing, spacing: 2) {
-                Text(CurrencyFormatter.string(
-                    amount: subscription.amount,
-                    currencyCode: subscription.currency
-                ))
-                .font(.callout.bold())
+                Text(CurrencyFormatter.string(amount: subscription.amount, currencyCode: subscription.currency))
+                    .font(.callout.bold())
                 Text(subscription.billingCycle.displayName)
                     .font(.caption2)
                     .foregroundStyle(.secondary)

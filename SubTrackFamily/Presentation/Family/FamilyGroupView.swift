@@ -3,32 +3,84 @@ import SwiftUI
 struct FamilyGroupView: View {
 
     @Environment(AppEnvironment.self) private var appEnv
-    @State private var groups: [SubscriptionGroup] = []
-    @State private var showCreateGroup = false
-    @State private var showJoinGroup = false
+    @State private var members: [GroupMember] = []
     @State private var isLoading = false
+    @State private var showCreateGroup = false
+    @State private var showJoinGroup   = false
+    @State private var showInviteCode  = false
+    @State private var errorMessage: String?
+
+    private var currentGroup: SubscriptionGroup? { appEnv.selectedGroup }
 
     var body: some View {
         NavigationStack {
             List {
-                if groups.isEmpty && !isLoading {
-                    ContentUnavailableView(
-                        "グループがありません",
-                        systemImage: "person.2",
-                        description: Text("グループを作成するか、招待コードで参加してください")
-                    )
-                } else {
-                    ForEach(groups) { group in
-                        NavigationLink {
-                            GroupDetailView(group: group)
-                        } label: {
-                            VStack(alignment: .leading) {
-                                Text(group.name).font(.headline)
-                                Text("招待コード: \(group.inviteCode)")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
+                // グループ選択セクション
+                if appEnv.groups.count > 1 {
+                    Section("グループ切り替え") {
+                        ForEach(appEnv.groups) { group in
+                            Button {
+                                Task {
+                                    appEnv.selectedGroup = group
+                                    await loadMembers()
+                                }
+                            } label: {
+                                HStack {
+                                    Text(group.name)
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    if group.id == currentGroup?.id {
+                                        Image(systemName: "checkmark").foregroundStyle(.tint)
+                                    }
+                                }
                             }
                         }
+                    }
+                }
+
+                // 現在のグループ情報
+                if let group = currentGroup {
+                    Section("グループ情報") {
+                        LabeledContent("グループ名", value: group.name)
+
+                        // 招待コード（オーナーのみ表示）
+                        if members.first(where: {
+                            $0.userID == appEnv.currentUser?.id
+                        })?.role == .owner {
+                            Button {
+                                showInviteCode = true
+                            } label: {
+                                Label("招待コードを確認", systemImage: "qrcode")
+                            }
+                        }
+                    }
+
+                    // メンバー一覧
+                    Section("メンバー（\(members.count)人）") {
+                        if members.isEmpty {
+                            if isLoading {
+                                ProgressView().frame(maxWidth: .infinity)
+                            }
+                        } else {
+                            ForEach(members) { member in
+                                MemberRow(
+                                    member: member,
+                                    isCurrentUser: member.userID == appEnv.currentUser?.id,
+                                    isOwner: members.first(where: {
+                                        $0.userID == appEnv.currentUser?.id
+                                    })?.role == .owner,
+                                    onRemove: {
+                                        Task { await removeMember(member) }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if let error = errorMessage {
+                    Section {
+                        Text(error).foregroundStyle(.red).font(.footnote)
                     }
                 }
             }
@@ -37,7 +89,7 @@ struct FamilyGroupView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button { showCreateGroup = true } label: {
-                            Label("グループを作成", systemImage: "plus")
+                            Label("新しいグループを作成", systemImage: "plus")
                         }
                         Button { showJoinGroup = true } label: {
                             Label("招待コードで参加", systemImage: "person.badge.plus")
@@ -47,77 +99,148 @@ struct FamilyGroupView: View {
                     }
                 }
             }
+            .refreshable { await loadMembers() }
             .sheet(isPresented: $showCreateGroup) {
                 CreateGroupSheet()
+                    .onDisappear { Task { await loadMembers() } }
             }
             .sheet(isPresented: $showJoinGroup) {
                 JoinGroupSheet()
+                    .onDisappear { Task { await loadMembers() } }
             }
-            .overlay { if isLoading { ProgressView() } }
+            .sheet(isPresented: $showInviteCode) {
+                if let group = currentGroup {
+                    InviteCodeSheet(group: group)
+                }
+            }
         }
-        .task { await loadGroups() }
+        .task { await loadMembers() }
     }
 
-    private func loadGroups() async {
-        guard let userID = appEnv.currentUser?.id else { return }
+    private func loadMembers() async {
+        guard let group = currentGroup else { return }
         isLoading = true
         defer { isLoading = false }
-        groups = (try? await appEnv.groupRepository.fetchGroups(userID: userID)) ?? []
+        members = (try? await appEnv.groupRepository.fetchMembers(groupID: group.id)) ?? []
+    }
+
+    private func removeMember(_ member: GroupMember) async {
+        guard let group = currentGroup else { return }
+        do {
+            try await appEnv.groupRepository.removeMember(groupID: group.id, userID: member.userID)
+            members.removeAll { $0.userID == member.userID }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 
-// MARK: - Placeholder Sub Views
+// MARK: - Member Row
 
-private struct GroupDetailView: View {
+private struct MemberRow: View {
+    let member: GroupMember
+    let isCurrentUser: Bool
+    let isOwner: Bool
+    let onRemove: () -> Void
+
+    var body: some View {
+        HStack {
+            Image(systemName: "person.circle.fill")
+                .foregroundStyle(.secondary)
+                .font(.title2)
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text(isCurrentUser ? "自分" : "メンバー")
+                        .font(.body)
+                    if isCurrentUser {
+                        Text("（あなた）")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Text(member.role.displayName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            // オーナーは自分以外を削除可能
+            if isOwner && !isCurrentUser {
+                Button(role: .destructive) { onRemove() } label: {
+                    Image(systemName: "minus.circle")
+                        .foregroundStyle(.red)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+}
+
+// MARK: - Invite Code Sheet
+
+private struct InviteCodeSheet: View {
     let group: SubscriptionGroup
-    var body: some View {
-        List {
-            Section("グループ情報") {
-                LabeledContent("グループ名", value: group.name)
-                LabeledContent("招待コード", value: group.inviteCode)
-            }
-            // TODO: メンバー一覧・ロール管理
-        }
-        .navigationTitle(group.name)
-    }
-}
-
-private struct CreateGroupSheet: View {
+    @Environment(AppEnvironment.self) private var appEnv
     @Environment(\.dismiss) private var dismiss
-    @State private var groupName = ""
+    @State private var isRegenerating = false
+
     var body: some View {
         NavigationStack {
-            Form {
-                TextField("グループ名（例: 田中家）", text: $groupName)
+            VStack(spacing: 32) {
+                Spacer()
+                VStack(spacing: 12) {
+                    Text("招待コード")
+                        .font(.headline)
+                    Text(group.inviteCode)
+                        .font(.system(size: 32, weight: .bold, design: .monospaced))
+                        .padding()
+                        .background(.tint.opacity(0.1))
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                    Button {
+                        UIPasteboard.general.string = group.inviteCode
+                    } label: {
+                        Label("コードをコピー", systemImage: "doc.on.doc")
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                Text("このコードを家族に共有してください。\nグループに参加できるのは招待コードを知っている人のみです。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+
+                Spacer()
+
+                Button(role: .destructive) {
+                    Task { await regenerate() }
+                } label: {
+                    if isRegenerating {
+                        ProgressView()
+                    } else {
+                        Text("招待コードを再生成する")
+                    }
+                }
+                .font(.footnote)
+                .padding(.bottom, 32)
             }
-            .navigationTitle("グループを作成")
+            .padding()
+            .navigationTitle("招待コード")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("作成") { /* TODO */ dismiss() }.disabled(groupName.isEmpty)
+                    Button("閉じる") { dismiss() }
                 }
             }
         }
     }
-}
 
-private struct JoinGroupSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    @State private var inviteCode = ""
-    var body: some View {
-        NavigationStack {
-            Form {
-                TextField("招待コードを入力", text: $inviteCode)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-            }
-            .navigationTitle("招待コードで参加")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("参加") { /* TODO */ dismiss() }.disabled(inviteCode.isEmpty)
-                }
-            }
+    private func regenerate() async {
+        isRegenerating = true
+        defer { isRegenerating = false }
+        _ = try? await appEnv.groupRepository.regenerateInviteCode(groupID: group.id)
+        // グループ一覧を再読み込みして新しい招待コードを反映
+        if let userID = appEnv.currentUser?.id {
+            await appEnv.loadGroups(for: userID)
         }
     }
 }

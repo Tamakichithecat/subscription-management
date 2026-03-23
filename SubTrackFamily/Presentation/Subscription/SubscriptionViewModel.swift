@@ -21,7 +21,7 @@ final class SubscriptionViewModel {
     }
 
     private let useCase: SubscriptionUseCase
-    private let groupID: UUID
+    let groupID: UUID
 
     init(useCase: SubscriptionUseCase, groupID: UUID) {
         self.useCase = useCase

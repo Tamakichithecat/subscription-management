@@ -46,8 +46,10 @@ final class DashboardViewModel {
 
     private let subscriptionUseCase: SubscriptionUseCase
     private let currencyUseCase: CurrencyUseCase
-    private let groupID: UUID
-    private let baseCurrency: String
+    let groupID: UUID
+    let baseCurrency: String
+
+    // MARK: - Init
 
     init(
         subscriptionUseCase: SubscriptionUseCase,
@@ -56,9 +58,9 @@ final class DashboardViewModel {
         baseCurrency: String
     ) {
         self.subscriptionUseCase = subscriptionUseCase
-        self.currencyUseCase = currencyUseCase
-        self.groupID = groupID
-        self.baseCurrency = baseCurrency
+        self.currencyUseCase     = currencyUseCase
+        self.groupID             = groupID
+        self.baseCurrency        = baseCurrency
     }
 
     // MARK: - Load
@@ -69,7 +71,8 @@ final class DashboardViewModel {
         defer { isLoading = false }
 
         do {
-            async let subs = subscriptionUseCase.fetchAll(groupID: groupID)
+            // subscriptions と exchange rates を並列取得
+            async let subs  = subscriptionUseCase.fetchAll(groupID: groupID)
             async let rates = currencyUseCase.fetchRates(base: baseCurrency)
             (subscriptions, exchangeRates) = try await (subs, rates)
         } catch {
