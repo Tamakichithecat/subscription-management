@@ -1,0 +1,42 @@
+name: Create a pull request for release.
+
+on:
+  push:
+    branches: [architect]
+
+jobs:
+  create-release-pr:
+    runs-on: ubuntu-latest
+
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PR_TITLE: "[claude-release]"
+      BASE_BRANCH: main
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # リリース用PRが既に存在するかどうかをチェック
+      - name: Check if pr exists
+        id: check_pr
+        run: |
+          echo "count=$(gh pr list -S ${PR_TITLE}' in:title' -B $BASE_BRANCH | wc -l)" >> $GITHUB_OUTPUT
+      # リリース用PRを作成
+      - name: Create release pr
+        if: ${{ steps.check_pr.outputs.count == 0 }}
+        run: |
+          now=`TZ=JST date +"%Y-%m-%d %H:%M"`
+          gh pr create -B ${BASE_BRANCH} -t "${PR_TITLE} ${now}" -b "" -d
+      - name: Set description
+        run: |
+          now=`TZ=JST date +"%Y-%m-%d %H:%M"`
+          pr_number=`gh pr list -S ${PR_TITLE}' in:title' -B $BASE_BRANCH --json number --jq '.[0].number'`
+          pr=`gh api /repos/kufu/sample-product/pulls/${pr_number}/commits --paginate | jq '.[] | select(.commit.message | contains("Merge pull request")) | .commit.message' | awk '{print "- "$4}'`
+          tmpfile=$(mktemp)
+          cat << EOF > $tmpfile
+          ## 関連リンク
+          $pr
+          EOF
+          gh pr edit architect --title "${PR_TITLE} ${now}"
+          gh pr edit architect --body-file $tmpfile
+          rm -f $tmpfile
