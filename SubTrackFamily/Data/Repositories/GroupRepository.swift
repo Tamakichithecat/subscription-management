@@ -35,6 +35,16 @@ struct GroupRepository: GroupRepositoryProtocol {
     }
 
     func createGroup(name: String, ownerID: UUID) async throws -> SubscriptionGroup {
+        /* DEBUG: セッション状態を確認（RLS エラー診断用） */
+        do {
+            let session = try await client.auth.session
+            print("✅ [createGroup] session.user.id = \(session.user.id)")
+            print("✅ [createGroup] ownerID (arg)   = \(ownerID)")
+            print("✅ [createGroup] 一致            = \(session.user.id == ownerID)")
+        } catch {
+            print("❌ [createGroup] セッションなし: \(error.localizedDescription)")
+        }
+
         struct Insert: Encodable {
             let name: String
             let owner_id: UUID
