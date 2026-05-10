@@ -83,6 +83,7 @@ struct SubscriptionFormView: View {
                     }
                 }
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle(isEditMode ? "サブスクを編集" : "サブスクを追加")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -120,7 +121,10 @@ struct SubscriptionFormView: View {
             errorMessage = "金額の形式が正しくありません"
             return
         }
-        guard let groupID = appEnv.currentUser?.id else { return }
+        guard let groupID = appEnv.selectedGroup?.id else {
+            errorMessage = "グループが選択されていません"
+            return
+        }
 
         isLoading = true
         defer { isLoading = false }
