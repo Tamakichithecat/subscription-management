@@ -82,6 +82,18 @@ final class AppEnvironment {
     /// グループを作成してそれを選択状態にする
     func createGroup(name: String) async throws {
         guard let userID = currentUser?.id else { throw AppError.notAuthenticated }
+
+        /* DEBUG: AppEnvironment 側でもセッションを確認 */
+        let supabase = SupabaseClientProvider.shared.client
+        do {
+            let session = try await supabase.auth.session
+            print("✅ [AppEnv.createGroup] セッション有効 user: \(session.user.id)")
+        } catch {
+            print("❌ [AppEnv.createGroup] セッションなし: \(error.localizedDescription)")
+            /* セッションが取れない場合は再サインインが必要 */
+            throw AppError.notAuthenticated
+        }
+
         let group = try await groupRepository.createGroup(name: name, ownerID: userID)
         groups.append(group)
         selectedGroup = group
