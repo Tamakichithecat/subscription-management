@@ -35,27 +35,39 @@ struct GroupRepository: GroupRepositoryProtocol {
     }
 
     func createGroup(name: String, ownerID: UUID) async throws -> SubscriptionGroup {
-        /* DEBUG: セッション状態を確認（RLS エラー診断用） */
-        do {
-            let session = try await client.auth.session
-            print("✅ [createGroup] session.user.id = \(session.user.id)")
-            print("✅ [createGroup] ownerID (arg)   = \(ownerID)")
-            print("✅ [createGroup] 一致            = \(session.user.id == ownerID)")
-        } catch {
-            print("❌ [createGroup] セッションなし: \(error.localizedDescription)")
-        }
-
         struct Insert: Encodable {
             let name: String
             let owner_id: UUID
         }
-        let dto: GroupDTO = try await client
+
+        /* Step 1: INSERT のみ（RETURNING なし）
+           - .select() を付けないことで PostgREST は return=minimal で動作
+           - AFTER INSERT トリガー (handle_new_group) が同トランザクション内で
+             group_members にオーナー行を追加してから 201 を返す
+           NOTE: .select() を付けると PostgREST が CTE 内で SELECT ポリシーを評価するが、
+                 その時点ではまだ group_members にユーザーが存在しないため
+                 get_my_group_ids() が空 → 0 行 → RLS エラーとなる。*/
+        try await client
             .from("groups")
             .insert(Insert(name: name, owner_id: ownerID))
+            .execute()
+
+        /* Step 2: 別リクエストで SELECT
+           - この時点でトリガーは完了済みなので group_members にユーザーが存在
+           - SELECT ポリシー (id IN get_my_group_ids()) が通る
+           - owner_id で絞り、created_at 降順で最新の 1 件を取得 */
+        let dtos: [GroupDTO] = try await client
+            .from("groups")
             .select()
-            .single()
+            .eq("owner_id", value: ownerID)
+            .order("created_at", ascending: false)
+            .limit(1)
             .execute()
             .value
+
+        guard let dto = dtos.first else {
+            throw AppError.notFound
+        }
         return dto.toDomain()
     }
 
