@@ -28,6 +28,7 @@ struct SignUpView: View {
             Section("プロフィール") {
                 TextField("表示名", text: $vm.displayName)
                     .textContentType(.name)
+                    .accessibilityIdentifier("field_displayName")
             }
             Section("アカウント情報") {
                 TextField("メールアドレス", text: $vm.email)
@@ -35,8 +36,10 @@ struct SignUpView: View {
                     .textContentType(.emailAddress)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
+                    .accessibilityIdentifier("field_email")
                 SecureField("パスワード（8文字以上）", text: $vm.password)
                     .textContentType(.newPassword)
+                    .accessibilityIdentifier("field_password")
             }
 
             if let error = vm.errorMessage {
@@ -56,6 +59,7 @@ struct SignUpView: View {
                     }
                 }
                 .disabled(vm.isLoading)
+                .accessibilityIdentifier("btn_register")
             }
         }
     }

@@ -31,8 +31,10 @@ struct SignInView: View {
                     .textContentType(.emailAddress)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
+                    .accessibilityIdentifier("field_email")
                 SecureField("パスワード", text: $vm.password)
                     .textContentType(.password)
+                    .accessibilityIdentifier("field_password")
             }
 
             if let error = vm.errorMessage {
@@ -56,6 +58,7 @@ struct SignInView: View {
                     }
                 }
                 .disabled(vm.isLoading)
+                .accessibilityIdentifier("btn_login")
             }
         }
     }

@@ -195,6 +195,7 @@ private struct InviteCodeSheet: View {
                         .padding()
                         .background(.tint.opacity(0.1))
                         .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .accessibilityIdentifier("text_inviteCode")
 
                     Button {
                         UIPasteboard.general.string = group.inviteCode

@@ -58,6 +58,7 @@ struct DashboardView: View {
                             currencyCode: appEnv.currentUser?.baseCurrency ?? "JPY"
                         ))
                         .font(.title2.bold())
+                        .accessibilityIdentifier("text_monthlyTotal")
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 4) {

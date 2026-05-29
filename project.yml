@@ -46,11 +46,26 @@ targets:
           SWIFT_OPTIMIZATION_LEVEL: "-O"
           SWIFT_COMPILATION_MODE: wholemodule
 
+  SubTrackFamilyUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: SubTrackFamilyUITests
+    dependencies:
+      - target: SubTrackFamily
+    settings:
+      base:
+        SWIFT_VERSION: "6.0"
+        PRODUCT_BUNDLE_IDENTIFIER: com.tamakichi.subtrackfamily.uitests
+        DEVELOPMENT_TEAM: ""
+        TEST_HOST: ""
+
 schemes:
   SubTrackFamily:
     build:
       targets:
         SubTrackFamily: all
+        SubTrackFamilyUITests: [test]
     run:
       config: Debug
       environmentVariables:
@@ -62,6 +77,23 @@ schemes:
           isEnabled: true
     test:
       config: Debug
+      targets:
+        - name: SubTrackFamilyUITests
+          parallelizable: false
+          randomExecutionOrder: false
+      environmentVariables:
+        - variable: SUPABASE_URL
+          value: ""
+          isEnabled: true
+        - variable: SUPABASE_ANON_KEY
+          value: ""
+          isEnabled: true
+        - variable: UAT_TEST_EMAIL
+          value: ""
+          isEnabled: true
+        - variable: UAT_TEST_PASSWORD
+          value: ""
+          isEnabled: true
     profile:
       config: Release
     analyze:

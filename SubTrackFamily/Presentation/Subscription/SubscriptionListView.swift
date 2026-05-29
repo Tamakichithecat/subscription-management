@@ -19,6 +19,7 @@ struct SubscriptionListView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button { showAdd = true } label: { Image(systemName: "plus") }
+                        .accessibilityIdentifier("btn_addSubscription")
                 }
             }
             .sheet(isPresented: $showAdd) {
