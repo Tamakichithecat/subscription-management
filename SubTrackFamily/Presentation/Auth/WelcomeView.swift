@@ -34,6 +34,7 @@ struct WelcomeView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
+                    .accessibilityIdentifier("btn_signin")
 
                     Button {
                         showSignUp = true
@@ -43,6 +44,7 @@ struct WelcomeView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
+                    .accessibilityIdentifier("btn_signup")
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 40)

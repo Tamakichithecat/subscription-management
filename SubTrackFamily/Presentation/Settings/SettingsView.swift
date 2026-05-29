@@ -29,6 +29,7 @@ struct SettingsView: View {
                     } label: {
                         Label("ログアウト", systemImage: "rectangle.portrait.and.arrow.right")
                     }
+                    .accessibilityIdentifier("btn_signout")
                 }
 
                 // 表示設定
@@ -41,6 +42,7 @@ struct SettingsView: View {
                     .onChange(of: selectedCurrency) { _, newValue in
                         Task { await saveCurrency(newValue) }
                     }
+                    .accessibilityIdentifier("picker_baseCurrency")
                 } header: {
                     Text("表示設定")
                 } footer: {

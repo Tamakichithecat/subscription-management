@@ -36,6 +36,7 @@ struct SubscriptionFormView: View {
             Form {
                 Section("基本情報") {
                     TextField("サービス名", text: $name)
+                        .accessibilityIdentifier("field_serviceName")
                     Picker("ステータス", selection: $status) {
                         ForEach(Subscription.Status.allCases, id: \.self) { s in
                             Text(s.displayName).tag(s)
@@ -51,6 +52,7 @@ struct SubscriptionFormView: View {
                     HStack {
                         TextField("金額", text: $amount)
                             .keyboardType(.decimalPad)
+                            .accessibilityIdentifier("field_amount")
                         Picker("通貨", selection: $currency) {
                             ForEach(AppConstants.SupportedCurrencies.all, id: \.self) { c in
                                 Text(c).tag(c)
@@ -95,6 +97,7 @@ struct SubscriptionFormView: View {
                         Task { await save() }
                     }
                     .disabled(name.isEmpty || amount.isEmpty || isLoading)
+                    .accessibilityIdentifier("btn_saveSubscription")
                 }
             }
             .onAppear { populateIfEditing() }

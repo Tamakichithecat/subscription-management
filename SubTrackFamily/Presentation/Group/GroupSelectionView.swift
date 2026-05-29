@@ -36,6 +36,7 @@ struct GroupSelectionView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
+                    .accessibilityIdentifier("btn_createGroup")
 
                     Button {
                         showJoin = true
@@ -45,6 +46,7 @@ struct GroupSelectionView: View {
                     }
                     .buttonStyle(.bordered)
                     .controlSize(.large)
+                    .accessibilityIdentifier("btn_joinGroup")
 
                     Button("ログアウト", role: .destructive) {
                         Task { await appEnv.signOut() }
@@ -79,6 +81,7 @@ struct CreateGroupSheet: View {
             Form {
                 Section {
                     TextField("例：田中家", text: $groupName)
+                        .accessibilityIdentifier("field_groupName")
                 } header: {
                     Text("グループ名")
                 } footer: {
@@ -102,6 +105,7 @@ struct CreateGroupSheet: View {
                         Task { await create() }
                     }
                     .disabled(groupName.trimmingCharacters(in: .whitespaces).isEmpty || isLoading)
+                    .accessibilityIdentifier("btn_createGroupConfirm")
                 }
             }
         }
@@ -139,6 +143,7 @@ struct JoinGroupSheet: View {
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
                         .font(.system(.body, design: .monospaced))
+                        .accessibilityIdentifier("field_inviteCode")
                 } header: {
                     Text("招待コード")
                 } footer: {
@@ -162,6 +167,7 @@ struct JoinGroupSheet: View {
                         Task { await join() }
                     }
                     .disabled(inviteCode.trimmingCharacters(in: .whitespaces).isEmpty || isLoading)
+                    .accessibilityIdentifier("btn_joinGroupConfirm")
                 }
             }
         }

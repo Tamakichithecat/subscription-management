@@ -56,7 +56,7 @@ struct ReportsView: View {
             .navigationTitle("レポート")
         }
         .task {
-            guard let groupID = appEnv.currentUser?.id else { return }
+            guard let groupID = appEnv.selectedGroup?.id else { return }
             subscriptions = (try? await appEnv.subscriptionUseCase.fetchAll(groupID: groupID)) ?? []
             exchangeRates = (try? await appEnv.currencyUseCase.fetchRates(base: baseCurrency)) ?? []
         }
