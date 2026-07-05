@@ -1,8 +1,8 @@
 # システムアーキテクチャ設計書
 
-**プロジェクト名**: SubTrack Family（仮称）
-**作成日**: 2026-03-23
-**バージョン**: 1.0
+**プロジェクト名**: SubTrack Family
+**最終更新**: 2026-07-05
+**バージョン**: 1.1（実装済み状態に合わせて更新）
 
 ---
 
@@ -10,7 +10,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                     iOS App (Swift/SwiftUI)               │
+│                     iOS App (Swift 6 / SwiftUI)           │
 │                                                           │
 │  ┌──────────────────────────────────────────────────┐    │
 │  │              Presentation Layer                   │    │
@@ -20,8 +20,8 @@
 │  │        Use Cases / Business Logic / Entities      │    │
 │  ├──────────────────────────────────────────────────┤    │
 │  │                Data Layer                         │    │
-│  │    Repositories / Remote DataSource / Local Cache │    │
-│  │              (Core Data)                          │    │
+│  │    Repositories / Remote DataSource (Supabase)    │    │
+│  │    ※ Core Data は v1.0 未実装                     │    │
 │  └──────────────────────────────────────────────────┘    │
 └───────────────────────┬─────────────────────────────────┘
                         │ HTTPS / WebSocket (Realtime)
@@ -31,26 +31,21 @@
 │                                                           │
 │  ┌──────────┐  ┌─────────────┐  ┌────────────────────┐  │
 │  │   Auth   │  │  PostgREST  │  │  Realtime (WS)     │  │
-│  │(JWT/OAuth│  │  (REST API) │  │  (グループ同期)     │  │
+│  │(JWT)     │  │  (REST API) │  │  (subscriptions同期)│  │
 │  └──────────┘  └─────────────┘  └────────────────────┘  │
 │                                                           │
-│  ┌─────────────────────────────┐  ┌──────────────────┐  │
-│  │     PostgreSQL (DB)          │  │  Edge Functions  │  │
-│  │  + Row Level Security (RLS)  │  │  (通知・為替取得) │  │
-│  └─────────────────────────────┘  └──────────────────┘  │
-│                                                           │
-│  ┌──────────────────────────────┐                        │
-│  │     Storage (アイコン画像等)  │                        │
-│  └──────────────────────────────┘                        │
-└────────────────────┬────────────────────────────────────┘
-                     │
-        ┌────────────┴─────────────┐
-        ▼                          ▼
-┌──────────────────┐   ┌─────────────────────────┐
-│  APNs (Apple     │   │  Exchange Rate API       │
-│  Push Notification│  │  Exchange Rate API       │
-│  Service)        │   │   (frankfurter.app)       │
-└──────────────────┘   └─────────────────────────┘
+│  ┌─────────────────────────────┐                         │
+│  │     PostgreSQL (DB)          │                         │
+│  │  + Row Level Security (RLS)  │                         │
+│  └─────────────────────────────┘                         │
+└─────────────────────────────────────────────────────────┘
+                        │
+              ┌─────────┴──────────┐
+              ▼                    ▼
+┌─────────────────┐   ┌───────────────────────┐
+│  APNs (将来v1.1) │   │  frankfurter.app       │
+│  プッシュ通知     │   │  為替レートAPI（無料）  │
+└─────────────────┘   └───────────────────────┘
 ```
 
 ---
@@ -59,292 +54,241 @@
 
 ### 2.1 iOS クライアント
 
-| 項目 | 技術 | 選定理由 |
-|------|------|----------|
-| 言語 | Swift 6.0+ | iOS Nativeの標準言語。Xcode 26からSwift 6がデフォルト |
-| UI フレームワーク | SwiftUI | 宣言的UI。Xcode 26でLiquid Glass UIが自動適用（iOS 26+） |
-| アーキテクチャ | MVVM + Clean Architecture | テスタビリティ・拡張性が高い |
-| 非同期処理 | Swift Concurrency (async/await) | モダンな非同期処理。コールバック地獄を回避 |
-| リアクティブ | Combine | SwiftUIとの親和性が高い |
-| ローカルDB | Core Data | オフラインキャッシュ。Apple標準で安定 |
-| パッケージ管理 | Swift Package Manager (SPM) | Xcodeに統合されており標準的 |
-| セキュアストレージ | Keychain (KeychainAccess) | 認証トークン・機密情報の安全な保存 |
+| 項目 | 技術 |
+|------|------|
+| 言語 | Swift 6.0（Strict Concurrency有効） |
+| UI フレームワーク | SwiftUI |
+| アーキテクチャ | MVVM + Clean Architecture |
+| 状態管理 | @Observable（iOS 17+ マクロ）、AppEnvironment で DI・状態を集中管理 |
+| 非同期処理 | Swift Concurrency（async/await, @MainActor） |
+| ローカルDB | **なし（v1.0）** ※Core Dataはv2.0検討 |
+| パッケージ管理 | Swift Package Manager（XcodeGen経由） |
+| セキュアストレージ | Keychain（KeychainAccess ライブラリ） |
 
-### 2.2 主要ライブラリ（iOS）
+### 2.2 主要ライブラリ
 
-| ライブラリ | 用途 | 取得先 |
-|-----------|------|--------|
-| `supabase-swift` | Supabase SDK（Auth・DB・Realtime） | github.com/supabase/supabase-swift |
-| `Charts` (Swift Charts) | 費用グラフの描画 | Apple標準（iOS 17+） |
-| `KeychainAccess` | Keychain操作の簡略化 | github.com/kishikawakatsumi/KeychainAccess |
+| ライブラリ | バージョン | 用途 |
+|-----------|-----------|------|
+| `supabase-swift` | 2.0.0+ | Auth・DB・Realtime |
+| `KeychainAccess` | 4.2.2+ | Keychain操作 |
+| `Swift Charts` | Apple標準（iOS 17+） | ダッシュボード・レポートのグラフ |
 
 ### 2.3 バックエンド（Supabase）
 
-| サービス | 用途 |
-|---------|------|
-| Supabase Auth | ユーザー認証（メール・Apple・Google） |
-| PostgreSQL | データ永続化 |
-| PostgREST | 自動生成REST API |
-| Realtime | グループ内のデータ変更をリアルタイム同期 |
-| Edge Functions | 通知スケジューラー・為替レート取得 |
-| Storage | サービスロゴ画像（将来対応） |
-| Row Level Security | グループ外へのデータアクセス制御 |
-
-### 2.4 外部サービス
-
-| サービス | 用途 | 代替 |
-|---------|------|------|
-| frankfurter.app | 為替レート取得（日次）。APIキー不要・完全無料 | - |
-| Apple Push Notification Service (APNs) | プッシュ通知（v1.1以降・Apple Developer Program要） | - |
+| サービス | 用途 | v1.0 実装状態 |
+|---------|------|--------------|
+| Supabase Auth | ユーザー認証（メール+パスワード） | ✅ 実装済み |
+| PostgreSQL | データ永続化 | ✅ 実装済み |
+| PostgREST | 自動生成REST API | ✅ 実装済み |
+| Realtime | subscriptionsテーブルの変更通知 | ✅ 実装済み |
+| Edge Functions | 通知・為替レート取得 | ❌ v1.1以降 |
+| Storage | サービスロゴ画像 | ❌ 未対応 |
+| Row Level Security | グループ外データアクセス制御 | ✅ 実装済み |
 
 ---
 
 ## 3. iOS クライアント内部設計
 
-### 3.1 ディレクトリ構成
+### 3.1 ディレクトリ構成（v1.0 実装済み）
 
 ```
 SubTrackFamily/
 ├── App/
 │   ├── SubTrackFamilyApp.swift        # アプリエントリーポイント
-│   └── AppDependencies.swift          # DI コンテナ
+│   └── AppEnvironment.swift           # DI コンテナ・状態管理（@Observable）
 │
-├── Presentation/                      # UI Layer
+├── Presentation/
+│   ├── App/
+│   │   ├── AppRouter.swift             # 認証状態による画面分岐
+│   │   └── MainTabView.swift           # タブバー（5タブ）
 │   ├── Auth/
-│   │   ├── WelcomeView.swift
-│   │   ├── SignInView.swift
-│   │   └── AuthViewModel.swift
+│   │   ├── WelcomeView.swift           # ロゴ・ログイン/新規登録ボタン
+│   │   ├── SignInView.swift            # メールログイン
+│   │   ├── SignUpView.swift            # 新規登録
+│   │   └── AuthViewModel.swift        # ✅ @Observableで状態管理
 │   ├── Dashboard/
-│   │   ├── DashboardView.swift
-│   │   └── DashboardViewModel.swift
+│   │   ├── DashboardView.swift         # 月次サマリー・更新予定
+│   │   └── DashboardViewModel.swift   # ✅ @Observableで状態管理
 │   ├── Subscription/
-│   │   ├── SubscriptionListView.swift
-│   │   ├── SubscriptionDetailView.swift
-│   │   ├── SubscriptionFormView.swift
-│   │   └── SubscriptionViewModel.swift
-│   ├── ContractList/                  # 契約情報一覧（相続対応）
-│   │   ├── ContractListView.swift
-│   │   └── ContractListViewModel.swift
+│   │   ├── SubscriptionListView.swift  # 一覧・検索・フィルタ
+│   │   ├── SubscriptionDetailView.swift # 詳細表示・編集導線
+│   │   ├── SubscriptionFormView.swift  # 追加・編集フォーム
+│   │   └── SubscriptionViewModel.swift # ✅ @Observableで状態管理
+│   ├── ContractList/
+│   │   └── ContractListView.swift      # 契約情報一覧（相続対応）※ViewModelなし
 │   ├── Family/
-│   │   ├── FamilyGroupView.swift
-│   │   └── FamilyGroupViewModel.swift
+│   │   └── FamilyGroupView.swift       # グループ管理・メンバー一覧 ※ViewModelなし
+│   ├── Group/
+│   │   └── GroupSelectionView.swift    # 初回グループ設定（作成/参加）
 │   ├── Reports/
-│   │   ├── ReportsView.swift
-│   │   └── ReportsViewModel.swift
+│   │   └── ReportsView.swift           # 費用グラフ ※タブ未接続
 │   └── Settings/
-│       ├── SettingsView.swift
-│       └── SettingsViewModel.swift
+│       └── SettingsView.swift          # 基準通貨・ログアウト
 │
-├── Domain/                            # Business Logic Layer
+├── Domain/
 │   ├── Entities/
-│   │   ├── Subscription.swift
-│   │   ├── Group.swift
-│   │   ├── User.swift
-│   │   └── ExchangeRate.swift
+│   │   ├── Subscription.swift          # サブスク本体（BillingCycle, Status 等のネスト型含む）
+│   │   ├── SubscriptionGroup.swift     # グループ
+│   │   ├── UserProfile.swift           # ユーザー
+│   │   ├── ExchangeRate.swift          # 為替レート
+│   │   └── Category.swift             # カテゴリー
 │   ├── UseCases/
-│   │   ├── SubscriptionUseCase.swift
-│   │   ├── GroupUseCase.swift
-│   │   ├── NotificationUseCase.swift
-│   │   └── CurrencyUseCase.swift
+│   │   ├── SubscriptionUseCase.swift   # CRUD・月換算金額算出
+│   │   └── CurrencyUseCase.swift       # 為替レート取得・キャッシュ
 │   └── Repositories/ (Protocols)
+│       ├── AuthRepositoryProtocol.swift
 │       ├── SubscriptionRepositoryProtocol.swift
 │       ├── GroupRepositoryProtocol.swift
 │       └── ExchangeRateRepositoryProtocol.swift
 │
-├── Data/                              # Data Layer
+├── Data/
 │   ├── Repositories/
-│   │   ├── SubscriptionRepository.swift
-│   │   ├── GroupRepository.swift
-│   │   └── ExchangeRateRepository.swift
-│   ├── Remote/
-│   │   ├── SupabaseClient.swift
-│   │   └── DTOs/
-│   │       ├── SubscriptionDTO.swift
-│   │       └── GroupDTO.swift
-│   └── Local/
-│       ├── CoreDataStack.swift
-│       └── Models/                   # Core Data NSManagedObject
+│   │   ├── AuthRepository.swift        # Supabase Auth
+│   │   ├── SubscriptionRepository.swift # subscriptionsテーブルCRUD
+│   │   ├── GroupRepository.swift       # groupsテーブル（2ステップINSERT実装済み）
+│   │   └── ExchangeRateRepository.swift # frankfurter.app API
+│   └── Remote/
+│       ├── SupabaseClientProvider.swift # シングルトン
+│       └── DTOs/
+│           ├── SubscriptionDTO.swift
+│           └── UserProfileDTO.swift
 │
-└── Core/                              # 共通ユーティリティ
+└── Core/
+    ├── Constants.swift                  # AppConstants（通貨リスト等）
     ├── Extensions/
-    ├── Constants.swift
+    │   └── Date+Billing.swift           # billingDaysLabel, isUpcomingBilling 等
     └── Formatters/
-        ├── CurrencyFormatter.swift
-        └── DateFormatter.swift
+        └── CurrencyFormatter.swift      # 通貨フォーマット
 ```
 
-### 3.2 データフロー
-
-```
-User Action
-    │
-    ▼
-SwiftUI View
-    │ (calls)
-    ▼
-ViewModel (@MainActor)
-    │ (calls)
-    ▼
-Use Case
-    │ (calls)
-    ▼
-Repository (Protocol)
-    │
-    ├── Remote: Supabase API  ──→  PostgreSQL
-    └── Local:  Core Data     ──→  SQLite (on device)
-```
-
-### 3.3 オフライン対応戦略
-
-1. アプリ起動時、まずローカルキャッシュ（Core Data）を即時表示
-2. バックグラウンドでSupabaseから最新データを取得・差分更新
-3. オフライン中の変更操作はローカルに保存し、オンライン復帰時に同期
-4. 競合解決: サーバー側の `updated_at` を優先（Last Write Wins）
-
----
-
-## 4. バックエンド設計（Supabase）
-
-### 4.1 Row Level Security (RLS) ポリシー
-
-全テーブルに対し、自分が所属するグループのデータのみアクセス可能なポリシーを設定する。
-
-```sql
--- subscriptions テーブルの RLS 例
-ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can read subscriptions in their group"
-  ON subscriptions FOR SELECT
-  USING (
-    group_id IN (
-      SELECT group_id FROM group_members
-      WHERE user_id = auth.uid()
-    )
-  );
-
-CREATE POLICY "Members can insert subscriptions in their group"
-  ON subscriptions FOR INSERT
-  WITH CHECK (
-    group_id IN (
-      SELECT group_id FROM group_members
-      WHERE user_id = auth.uid()
-        AND role IN ('owner', 'member')
-    )
-  );
-```
-
-### 4.2 Edge Functions 一覧
-
-| 関数名 | トリガー | 処理 |
-|--------|---------|------|
-| `send-renewal-notifications` | 毎日 08:00 JST（cron） | 翌日・3日後・7日後に請求日が来るサブスクを検索しAPNs経由でプッシュ通知 |
-| `fetch-exchange-rates` | 毎日 01:00 JST（cron） | Exchange Rate APIから為替レートを取得しDBに保存 |
-
-### 4.3 Realtime 購読設定
-
-グループ内の変更をリアルタイムで家族全員に反映する。
+### 3.2 AppEnvironment の役割
 
 ```swift
-// iOS側でのRealtime購読例
-let channel = supabase.realtime.channel("group:\(groupId)")
-channel.on(.postgresChanges, filter: .init(
-    event: .all,
-    schema: "public",
-    table: "subscriptions",
-    filter: "group_id=eq.\(groupId)"
-)) { payload in
-    // サブスク変更を検知してローカルデータを更新
+// AppEnvironment は @Observable + @MainActor で全ビューに共有される
+// アクセス: @Environment(AppEnvironment.self) private var appEnv
+
+AppEnvironment {
+    // Auth state
+    isAuthenticated: Bool
+    isCheckingSession: Bool
+    currentUser: UserProfile?
+
+    // Group state（最重要）
+    selectedGroup: SubscriptionGroup?   // ← グループスコープの操作はここから取得
+    groups: [SubscriptionGroup]
+
+    // Repositories（DIコンテナ）
+    authRepository / subscriptionRepository / groupRepository / exchangeRateRepository
+
+    // Use Cases
+    subscriptionUseCase / currencyUseCase
+
+    // Realtime
+    realtimeChannel: RealtimeChannelV2?
 }
-channel.subscribe()
+```
+
+### 3.3 データフロー
+
+```
+User Action（View）
+    │
+    ▼
+ViewModel (@MainActor)
+    │ calls
+    ▼
+UseCase
+    │ calls
+    ▼
+Repository (Protocol実装)
+    │
+    └── Remote: Supabase PostgREST API → PostgreSQL
+```
+
+Realtime（双方向）:
+```
+PostgreSQL（subscriptions変更）
+    │ WebSocket
+    ▼
+Supabase Realtime
+    │ channel.onPostgresChange
+    ▼
+AppEnvironment
+    │ NotificationCenter.post(.subscriptionsDidChange)
+    ▼
+各ViewModel → load() を再実行
 ```
 
 ---
 
-## 5. 通知フロー
+## 4. 画面遷移フロー
 
 ```
-[Edge Function (Daily Cron)]
-        │
-        │ 1. 翌日〜7日以内に次回請求日が来るサブスクを検索
-        │
-        ▼
-[PostgreSQL]
-        │
-        │ 2. 対象サブスクの通知設定を確認
-        │    (notification_settings テーブル)
-        │
-        ▼
-[APNs (Apple Push Notification Service)]
-        │
-        │ 3. device_tokens テーブルからユーザーのデバイストークンを取得
-        │    → APNs経由でプッシュ通知を送信
-        │
-        ▼
-[ユーザーのiPhone]
-        │
-        │ 4. 通知受信 → アプリを開くとサブスク詳細へ遷移
+起動 → SubTrackFamilyApp → AppEnvironment.checkSession()
+         │
+         ▼
+       AppRouter
+         ├── isCheckingSession == true   → ProgressView（スプラッシュ）
+         ├── !isAuthenticated            → WelcomeView
+         │     ├── 「ログイン」          → SignInView
+         │     └── 「新規登録」          → SignUpView
+         ├── isAuthenticated
+         │   && selectedGroup == nil     → GroupSelectionView
+         │         ├── 「グループを作成」 → CreateGroupSheet
+         │         └── 「招待コードで参加」→ JoinGroupSheet
+         └── isAuthenticated
+             && selectedGroup != nil     → MainTabView（5タブ）
 ```
 
 ---
 
-## 6. 為替レート取得フロー
+## 5. セキュリティ設計
 
-```
-[Edge Function (Daily Cron: 01:00 JST)]
-        │
-        ▼
-[frankfurter.app（APIキー不要）]
-  GET /v1/latest?base=JPY
-        │
-        ▼
-[exchange_rates テーブルに UPSERT]
-  (base_currency, target_currency, rate, fetched_at)
-        │
-        ▼
-[iOS App]
-  - 起動時にキャッシュを読み込む
-  - 古いキャッシュ（>24h）の場合は再取得をトリガー
-```
+| 脅威 | 対策 | 実装状態 |
+|------|------|---------|
+| 不正アクセス | Supabase RLS でグループ外データへのアクセスを DB レベルで遮断 | ✅ |
+| 認証トークン漏洩 | iOS Keychain に保存（KeychainAccess） | ✅ |
+| 機密財務データ | クレカ番号・銀行口座番号は保存しない（メモのみ） | ✅（設計上） |
+| 通信の盗聴 | 全通信 HTTPS / TLS | ✅（Supabase標準） |
+| アプリ乗っ取り | Face ID / Touch ID によるアプリロック | ❌ v1.1以降 |
+| 招待コード悪用 | オーナーが任意のタイミングで再生成可能 | ✅ |
+
+詳細は `docs/rls-design.md` を参照。
 
 ---
 
-## 7. セキュリティ設計
+## 6. 非機能要件の実現状況
 
-| 脅威 | 対策 |
-|------|------|
-| 不正アクセス | Supabase RLS でグループ外データへのアクセスを DB レベルで遮断 |
-| 認証トークン漏洩 | iOS Keychain に保存（ memory には持たない） |
-| 機密財務データ | クレジットカード番号・銀行口座番号は保存しない（メモのみ） |
-| 通信の盗聴 | 全通信 HTTPS / TLS 1.3 |
-| アプリ乗っ取り | Face ID / Touch ID によるアプリロック |
-| 招待コードの悪用 | 招待コードは1回使用したら無効化（またはオーナーが都度再発行） |
-
----
-
-## 8. 開発・デプロイフロー
-
-```
-開発者
-  │
-  ├── feature/* ブランチで開発
-  │
-  ├── Pull Request → main
-  │     ├── SwiftLint（コード品質チェック）
-  │     └── Unit Tests（Xcode Cloud または GitHub Actions）
-  │
-  ├── main マージ → TestFlight 自動配布（Xcode Cloud）
-  │
-  └── リリースタグ → App Store Connect 審査申請
-```
+| 要件 | 実現方針 | v1.0 実装状態 |
+|------|---------|--------------|
+| オフライン対応 | Core Data キャッシュ | ❌ v2.0検討 |
+| 起動速度 | Supabaseから非同期取得、ProgressViewで待機 | ⚠️（キャッシュなし） |
+| スケーラビリティ | Supabase マネージドサービス | ✅ |
+| プライバシー | App Privacy ラベル設定・財務データ非保存 | 設定要（App Store申請時） |
+| アクセシビリティ | accessibilityIdentifier付与済み（UITest用） | ✅ |
 
 ---
 
-## 9. 非機能要件の実現方針
+## 7. 開発・デプロイフロー
 
-| 要件 | 実現方針 |
-|------|---------|
-| オフライン対応 | Core Data キャッシュ + バックグラウンド同期 |
-| 起動速度 | Core Data から先読みし、Supabase は非同期更新 |
-| スケーラビリティ | Supabase（PostgreSQL）はマネージドサービスで自動スケール |
-| プライバシー | App Privacy ラベルを適切に設定・財務データは保存しない |
-| アクセシビリティ | SwiftUI の標準アクセシビリティ対応（VoiceOver等） |
+```
+feature/* または architect ブランチで開発
+    │
+    ├── GitHub Actions（on push to architect）
+    │     └── auto-PR作成（Pull Request へ）
+    │
+    ├── Pull Request → main
+    │     └── レビュー・承認
+    │
+    └── main → TestFlight / App Store（将来対応）
+```
+
+### XcodeGen ワークフロー
+
+```bash
+# project.yml を変更したとき必ず実行
+xcodegen generate
+
+# UITest実行
+Cmd+U（スキームに環境変数を設定済みであること）
+```
