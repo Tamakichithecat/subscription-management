@@ -1,5 +1,13 @@
 name: SubTrackFamily
 
+# ドキュメントをXcodeプロジェクトナビゲータに表示する（コンパイル対象外）
+fileGroups:
+  - CLAUDE.md
+  - agent.md
+  - skills.md
+  - docs
+  - README.md
+
 options:
   bundleIdPrefix: com.tamakichi
   deploymentTarget:
